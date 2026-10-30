@@ -1,0 +1,4 @@
+node_modules/
+src/adobe/cep/bin/
+installer/out/
+*.log

@@ -1,0 +1,20 @@
+{
+  "name": "reel-automatico",
+  "version": "0.10.6",
+  "private": true,
+  "description": "App para Windows que transforma um vídeo bruto num Reel pronto: cortes, legenda animada, zoom e sons, sem Premiere.",
+  "author": "julianleno",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test \"tests/**/*.test.js\"",
+    "fetch:bin": "node scripts/fetch-binaries.js",
+    "setup": "npm install --prefix prototypes/reel-sem-premiere",
+    "reel": "npm run reel --prefix prototypes/reel-sem-premiere",
+    "empacotar": "npm run empacotar --prefix prototypes/reel-sem-premiere",
+    "reel:check": "node scripts/reel-check.js",
+    "reel:juiz": "node scripts/reel-juiz.js"
+  }
+}

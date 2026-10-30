@@ -1,0 +1,398 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <title>Reel automático</title>
+    <!-- as fontes e as cores do painel -->
+    <link rel="stylesheet" href="../../src/adobe/cep/css/panel.css" />
+    <style>
+      html, body { height: 100%; margin: 0; overflow: hidden; background: var(--bg); color: var(--text); font: 500 14px/1.45 "Manrope", system-ui, sans-serif; }
+      .app { display: grid; grid-template-columns: minmax(0, 1fr) clamp(340px, 26vw, 420px); gap: 20px; height: 100%; padding: 20px; box-sizing: border-box; }
+      svg.i { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+
+      /* palco: soltar o vídeo e assistir */
+      .stage { position: relative; display: flex; align-items: center; justify-content: center; border: 2px dashed var(--line); border-radius: 16px; background: var(--surface); min-height: 0; overflow: hidden; }
+      .stage.has { border-style: solid; border-color: var(--line-soft); background: radial-gradient(ellipse at 50% 40%, #303036 0%, var(--surface) 70%); }
+      .drop { text-align: center; color: var(--text-dim); padding: 24px; max-width: 460px; }
+      .drop .big-i { width: 64px; height: 64px; stroke-width: 1.4; color: var(--accent); margin-bottom: 14px; }
+      .drop h1 { margin: 0 0 6px; color: var(--text); font-size: 26px; font-weight: 800; letter-spacing: -0.01em; }
+      .drop p { margin: 0; font-size: 15px; }
+      .drop .btn-main { margin: 22px auto 8px; }
+      .drop .kbd { font-size: 12.5px; color: var(--text-faint); }
+      .does { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: 26px 0 0; padding: 0; list-style: none; }
+      .does li { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 99px; background: var(--raised); color: var(--text-dim); font-size: 13px; }
+      .does svg.i { width: 15px; height: 15px; color: var(--accent); }
+      .over-msg { position: absolute; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 10px; background: linear-gradient(var(--accent-soft), var(--accent-soft)), var(--surface); color: var(--accent); font-size: 22px; font-weight: 800; z-index: 3; pointer-events: none; }
+      .over-msg svg.i { width: 56px; height: 56px; stroke-width: 1.4; }
+      .stage.over { border-style: dashed; border-color: var(--accent); }
+      .stage.over .over-msg { display: flex; }
+      .player-wrap { position: absolute; inset: 64px 20px 20px; display: flex; align-items: center; justify-content: center; }
+      video { display: block; max-width: 100%; max-height: 100%; border-radius: 12px; background: #000; box-shadow: 0 14px 44px rgba(0, 0, 0, 0.5); }
+      .stage-top { position: absolute; top: 14px; left: 16px; right: 16px; display: flex; align-items: center; gap: 10px; z-index: 2; }
+      .file-chip { min-width: 0; display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 99px; background: var(--raised); color: var(--text); font-size: 13px; font-weight: 600; }
+      .file-chip span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .file-chip small { color: var(--text-dim); font-weight: 500; font-size: 13px; flex: none; }
+      .file-chip svg.i { width: 15px; height: 15px; color: var(--text-dim); }
+      .queue { flex: none; padding: 5px 11px; border-radius: 99px; background: var(--accent-soft); border: 1px solid var(--accent-line); color: #b8b8ff; font-weight: 700; font-size: 13px; } /* 5,9:1 no fundo lavanda claro */
+      .stage-top .btn-sec { margin-left: auto; flex: none; }
+      .stage-note { position: absolute; left: 50%; top: 64px; transform: translateX(-50%); max-width: calc(100% - 40px); box-sizing: border-box; display: flex; gap: 10px; align-items: center; padding: 10px 14px; border-radius: 10px; background: #3a2826; border: 1px solid rgba(255, 116, 102, 0.45); color: var(--text); font-size: 14px; z-index: 4; }
+      .stage-note svg.i { color: var(--err); }
+
+      /* botões */
+      .btn-main, .btn-sec, .btn-ai, .btn-link { display: inline-flex; align-items: center; justify-content: center; gap: 8px; box-sizing: border-box; font: 700 14px "Manrope", sans-serif; cursor: pointer; border-radius: 10px; }
+      .btn-main { min-height: 44px; padding: 0 22px; border: 0; background: var(--accent); color: var(--accent-ink); }
+      .btn-main:hover { background: #adadff; }
+      .btn-main:disabled { background: var(--raised); color: var(--text-dim); cursor: not-allowed; }
+      .btn-main.big { width: 100%; min-height: 52px; font-size: 16px; }
+      .btn-sec { min-height: 40px; padding: 0 16px; border: 1px solid var(--line); background: transparent; color: var(--text); }
+      .btn-sec:hover { background: var(--raised); }
+      .btn-sec:disabled { opacity: 0.5; cursor: not-allowed; }
+      .btn-sec.small { min-height: 32px; padding: 0 12px; font-size: 13px; border-radius: 8px; }
+      .btn-ai { min-height: 40px; padding: 0 16px; border: 1px solid var(--ai-line); background: var(--ai-soft); color: var(--ai); }
+      .btn-ai:hover { background: rgba(255, 210, 63, 0.2); }
+      .post-text { margin: 0; color: var(--text-dim); font-size: 13.5px; white-space: pre-wrap; max-height: 120px; overflow: auto; }
+      .btn-link { padding: 4px 6px; border: 0; background: none; color: var(--accent); font-size: 13px; border-radius: 6px; }
+      .btn-link:hover { text-decoration: underline; }
+      .row { display: flex; gap: 8px; }
+      .row > * { flex: 1 1 0; }
+
+      /* coluna da direita: uma vista por vez (opções, fazendo, pronto, erro) */
+      .side { display: flex; flex-direction: column; min-height: 0; }
+      .view { display: none; flex-direction: column; gap: 12px; min-height: 0; flex: 1 1 auto; }
+      .side[data-view="opts"] .v-opts, .side[data-view="run"] .v-run, .side[data-view="error"] .v-run, .side[data-view="done"] .v-done { display: flex; }
+      .scroll { flex: 1 1 auto; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 12px; padding-right: 4px; margin-right: -4px; }
+      .scroll > * { flex: none; }
+      /* o fim da lista some aos poucos: mostra que tem mais embaixo */
+      .v-opts .scroll { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent); padding-bottom: 20px; }
+      .card { background: var(--surface); border: 1px solid var(--line-soft); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+      .card h2 { margin: 0; font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-faint); }
+      .card h2.title { font-size: 20px; letter-spacing: -0.01em; text-transform: none; color: var(--text); font-weight: 800; display: flex; align-items: center; gap: 8px; }
+      .field-label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--text-dim); }
+      .tip { margin: -4px 0 0; color: var(--text-faint); font-size: 12.5px; }
+      select.sel, input.field { width: 100%; height: 40px; box-sizing: border-box; background-color: var(--raised); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 0 12px; font: 500 14px "Manrope", sans-serif; }
+      select.sel { padding-right: 32px; background-position: calc(100% - 17px) 18px, calc(100% - 13px) 18px; }
+      input.field::placeholder { color: var(--text-faint); }
+      select.sel:hover, input.field:hover { border-color: #4c4c54; }
+      select.sel:focus, input.field:focus, textarea:focus { border-color: var(--accent); }
+      /* em tela baixa (notebook com 150%) a prévia do estilo encolhe e as chaves aparecem */
+      #look, .tile canvas { display: block; width: 100%; height: auto; border-radius: 8px; background: radial-gradient(circle at 70% 30%, #6d5a4e 0%, transparent 45%), linear-gradient(145deg, #39424c, #22272d 57%, #514740); }
+      #look { max-height: 22vh; object-fit: cover; }
+      .look-btn { position: relative; display: block; width: 100%; padding: 0; border: 0; border-radius: 8px; background: none; cursor: pointer; line-height: 0; }
+      .look-hint { position: absolute; right: 8px; bottom: 8px; padding: 5px 10px; border-radius: 99px; background: rgba(0, 0, 0, 0.6); color: #fff; font: 700 12.5px/1.2 "Manrope", sans-serif; }
+      .look-btn:hover .look-hint { background: var(--accent); color: var(--accent-ink); }
+      /* galeria dos estilos: miniaturas paradas; a do mouse (ou do foco) anima */
+      .modal.gallery .box { width: min(1040px, calc(100vw - 40px)); max-height: calc(100vh - 40px); }
+      .gal-scroll { flex: 1 1 auto; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 12px; padding-right: 4px; }
+      .gal-scroll h3 { margin: 4px 0 0; font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-faint); }
+      .gal-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
+      .tile { display: flex; flex-direction: column; padding: 0; border: 2px solid transparent; border-radius: 10px; background: var(--raised); color: var(--text); font: 600 13px "Manrope", sans-serif; text-align: left; cursor: pointer; overflow: hidden; }
+      .tile canvas { border-radius: 0; }
+      .tile span { padding: 8px 10px; }
+      .tile:hover { border-color: var(--accent-line); }
+      .tile[aria-pressed="true"] { border-color: var(--accent); }
+      .tile[aria-pressed="true"] span::after { content: " ✓"; color: var(--accent); }
+
+      /* chaves (liga/desliga) */
+      label.sw { display: flex; align-items: center; justify-content: space-between; gap: 12px; cursor: pointer; min-height: 40px; }
+      label.sw > span { display: flex; flex-direction: column; color: var(--text); font-weight: 600; }
+      label.sw small { color: var(--text-faint); font-size: 12.5px; font-weight: 500; }
+      label.sw .end { display: flex; align-items: center; gap: 10px; flex: none; }
+      label.sw input[type="checkbox"] { appearance: none; -webkit-appearance: none; position: relative; width: 38px; height: 22px; margin: 0; flex: none; border-radius: 99px; background: var(--raised); border: 1px solid #77777f; cursor: pointer; /* 3,2:1 com o cartão */ transition: background 0.15s ease; }
+      label.sw input[type="checkbox"]::after { content: ""; position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: var(--text-dim); transition: transform 0.15s ease; }
+      label.sw input[type="checkbox"]:checked { background: var(--accent); border-color: var(--accent); }
+      label.sw input[type="checkbox"]:checked::after { transform: translateX(16px); background: var(--accent-ink); }
+      input[type="color"].swatch { width: 30px; height: 30px; padding: 0; border: 1px solid var(--line); border-radius: 50%; background: none; cursor: pointer; overflow: hidden; }
+      input[type="color"].swatch::-webkit-color-swatch-wrapper { padding: 0; }
+      input[type="color"].swatch::-webkit-color-swatch { border: 0; border-radius: 50%; }
+      .music { display: flex; align-items: center; gap: 8px; }
+      .music .btn-sec { flex: 1 1 auto; justify-content: flex-start; min-width: 0; font-weight: 600; }
+      .music .btn-sec span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      details.more { border: 1px solid var(--line-soft); border-radius: 12px; background: var(--surface); }
+      details.more > summary { list-style: none; display: flex; align-items: center; gap: 8px; padding: 14px 16px; cursor: pointer; font-weight: 700; color: var(--text-dim); border-radius: 12px; }
+      details.more > summary::-webkit-details-marker { display: none; }
+      details.more > summary:hover { color: var(--text); }
+      details.more > summary svg.i { transition: transform 0.15s ease; margin-left: auto; }
+      details.more[open] > summary svg.i { transform: rotate(180deg); }
+      details.more .card { border: 0; border-top: 1px solid var(--line-soft); border-radius: 0 0 12px 12px; background: transparent; }
+      .ai-row { display: flex; align-items: center; gap: 6px; color: var(--ai); font-weight: 700; font-size: 13px; }
+      .ai-row svg.i { width: 16px; height: 16px; }
+      input.field.ai { border-color: var(--ai-line); }
+      input.field.ai:focus { border-color: var(--ai); }
+      .foot { flex: none; display: flex; flex-direction: column; gap: 8px; padding-top: 12px; }
+      .status { color: var(--text-dim); font-size: 13.5px; text-align: center; }
+      .status:empty { display: none; }
+      .status.ok { color: var(--ok); }
+      .status.warn { color: var(--warn); }
+      .mini { display: flex; flex-direction: column; gap: 6px; }
+
+      /* fazendo */
+      .now-line { margin: 0; font-size: 18px; font-weight: 700; color: var(--text); }
+      .bar { height: 8px; background: var(--raised); border-radius: 99px; overflow: hidden; }
+      .bar i { display: block; height: 100%; width: 0; background: var(--accent); border-radius: 99px; transition: width 0.3s ease; }
+      .bar-row { display: flex; justify-content: space-between; gap: 10px; color: var(--text-dim); font-size: 13px; font-variant-numeric: tabular-nums; }
+      .msg { color: var(--text-dim); font-size: 13.5px; margin: 0; }
+      .msg:empty { display: none; }
+      ol.etapas { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; font-size: 13.5px; }
+      ol.etapas li { display: flex; gap: 10px; align-items: center; color: var(--text-faint); }
+      ol.etapas li::before { content: ""; box-sizing: border-box; width: 8px; height: 8px; margin: 0 3px; border-radius: 50%; border: 1.5px solid #5d5d66; flex: none; }
+      ol.etapas li.now { color: var(--text); font-weight: 700; }
+      ol.etapas li.now::before { border-color: var(--accent); background: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
+      ol.etapas li.ok { color: var(--text-dim); }
+      ol.etapas li.ok::before { content: "✓"; width: 14px; height: auto; margin: 0; border: 0; color: var(--ok); font-weight: 800; line-height: 1; text-align: center; }
+      ol.etapas li.fail { color: var(--err); font-weight: 700; }
+      ol.etapas li.fail::before { content: "✕"; width: 14px; height: auto; margin: 0; border: 0; color: var(--err); font-weight: 800; line-height: 1; text-align: center; }
+      .side[data-view="error"] .run-only, .side[data-view="run"] .err-only { display: none; }
+      .errbox { display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: 10px; background: rgba(255, 116, 102, 0.1); border: 1px solid rgba(255, 116, 102, 0.4); }
+      .errbox strong { color: var(--text); font-size: 15px; }
+      .errbox p { margin: 0; color: var(--text-dim); font-size: 13.5px; }
+      .errbox details { color: var(--text-faint); font-size: 12.5px; }
+      .errbox details summary { cursor: pointer; }
+      .errbox code { display: block; margin-top: 6px; white-space: pre-wrap; word-break: break-word; font-size: 12px; color: var(--text-dim); }
+
+      /* pronto */
+      .done-i { width: 26px; height: 26px; color: var(--ok); stroke-width: 2.2; }
+      .where { margin: -4px 0 0; color: var(--text-dim); font-size: 13.5px; overflow-wrap: anywhere; }
+      .done-msg { margin: 0; font-size: 13.5px; color: var(--ok); }
+      .done-msg.warn { color: var(--warn); }
+      .head-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+      .covers { display: flex; gap: 8px; }
+      .covers button { flex: 1 1 0; min-width: 0; padding: 0; border: 2px solid transparent; border-radius: 9px; background: none; cursor: pointer; line-height: 0; }
+      .covers button img { width: 100%; border-radius: 7px; }
+      .covers button[aria-pressed="true"] { border-color: var(--accent); }
+      .covers button:hover { border-color: var(--accent-line); }
+      .covers button[aria-pressed="true"]:hover { border-color: var(--accent); }
+      ol.lines { margin: 0; padding-left: 24px; max-height: 180px; overflow: auto; color: var(--text-dim); font-size: 13.5px; display: flex; flex-direction: column; gap: 3px; }
+      textarea { width: 100%; box-sizing: border-box; background: var(--raised); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font: 13.5px/1.45 "Manrope", sans-serif; resize: vertical; }
+      textarea::placeholder { color: var(--text-faint); }
+      input[type="range"] { width: 100%; accent-color: var(--accent); }
+
+      /* pergunta ao fechar no meio */
+      .modal { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(10, 10, 12, 0.62); z-index: 20; }
+      .modal .box { width: min(420px, calc(100vw - 40px)); box-sizing: border-box; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 22px; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6); }
+      .modal h2 { margin: 0; font-size: 19px; font-weight: 800; }
+      .modal p { margin: 0; color: var(--text-dim); }
+
+      button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+      #progress:focus { outline: none; }
+      .hidden { display: none !important; }
+      /* tela baixa (notebook com 125% a 150%): mais opções à vista sem rolar */
+      @media (max-height: 760px) {
+        .app { padding: 14px; gap: 14px; }
+        .card { padding: 12px 14px; gap: 8px; }
+        .scroll { gap: 10px; }
+        select.sel, input.field { height: 36px; }
+        select.sel { background-position: calc(100% - 17px) 16px, calc(100% - 13px) 16px; }
+        label.sw { min-height: 36px; }
+        #look { max-height: 17vh; }
+      }
+      @media (prefers-reduced-motion: reduce) { .bar i, label.sw input[type="checkbox"], label.sw input[type="checkbox"]::after { transition: none; } }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <main class="stage" id="stage" aria-label="Vídeo">
+        <div class="drop" id="drop">
+          <svg class="i big-i" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="2.5" width="14" height="19" rx="2.5" /><path d="M10 9.2v5.6l4.6-2.8z" /></svg>
+          <h1>Solte seu vídeo aqui</h1>
+          <p>Do jeito que saiu do celular. O original não muda.</p>
+          <button class="btn-main" id="pick" type="button"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 7.5A2 2 0 0 1 5.5 5.5h4l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z" /></svg>Escolher vídeo</button>
+          <div class="kbd">ou aperte Ctrl+O</div>
+          <ul class="does">
+            <li><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6.5" cy="7" r="2.5" /><circle cx="6.5" cy="17" r="2.5" /><path d="M8.6 8.4 19 16M8.6 15.6 19 8" /></svg>Corta as pausas</li>
+            <li><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3" /><path d="M7 11h4M13 11h4M7 15h7" /></svg>Põe legenda animada</li>
+            <li><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6" /><path d="m20 20-4.2-4.2M11 8.5v5M8.5 11h5" /></svg>Zoom e sons nos destaques</li>
+          </ul>
+        </div>
+        <div class="over-msg" aria-hidden="true"><svg class="i" viewBox="0 0 24 24"><path d="M12 4v11M7.5 10.5 12 15l4.5-4.5" /><path d="M5 19h14" /></svg><span id="over-text">Pode soltar</span></div>
+        <div class="stage-top hidden" id="stagetop">
+          <div class="file-chip" id="filechip"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="2.5" width="14" height="19" rx="2.5" /><path d="M10 9.2v5.6l4.6-2.8z" /></svg><span id="filename"></span><small id="filelen"></small></div>
+          <div id="queue" class="queue hidden" aria-live="polite"></div>
+          <button class="btn-sec small" id="swap" type="button">Trocar vídeo</button>
+        </div>
+        <div class="player-wrap hidden" id="playerwrap"><video id="player" controls></video></div>
+        <div class="stage-note hidden" id="stagenote" role="alert"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 7.5v5.5M12 16.4v.1" /></svg><span id="stagenote-text"></span></div>
+      </main>
+
+      <aside class="side" id="side" data-view="opts" aria-label="Opções do Reel">
+        <!-- 1. opções -->
+        <section class="view v-opts">
+          <div class="scroll" id="opts">
+            <div class="card">
+              <h2>Legenda</h2>
+              <select class="sel" id="style" aria-label="Estilo da legenda"></select>
+              <button class="look-btn" id="look-btn" type="button" aria-label="Ver todos os estilos de legenda"><canvas id="look" width="360" height="200"></canvas><span class="look-hint">Ver todos os estilos</span></button>
+            </div>
+            <div class="card">
+              <h2>Vídeo</h2>
+              <label class="field-label">Formato
+                <select class="sel" id="format">
+                  <option value="reels" selected>Em pé 9:16 (Reels, TikTok, Shorts)</option>
+                  <option value="feed">Feed 4:5 (post do Instagram)</option>
+                  <option value="quadrado">Quadrado 1:1</option>
+                  <option value="todos">Os três: em pé, feed e quadrado</option>
+                </select>
+              </label>
+              <label class="field-label">Duração
+                <select class="sel" id="target">
+                  <option value="0" selected>Tudo o que é bom (sem limite)</option>
+                  <option value="30">Até 30 segundos</option>
+                  <option value="60">Até 1 minuto</option>
+                  <option value="90">Até 1 minuto e meio</option>
+                </select>
+              </label>
+            </div>
+            <div class="card">
+              <h2>O que fazer</h2>
+              <label class="sw hidden" id="joinbox"><span>Juntar num Reel só<small>Os vídeos escolhidos, na ordem, viram um Reel. Desligado: um Reel para cada.</small></span><input id="o-join" type="checkbox" role="switch" /></label>
+              <label class="sw"><span>Tirar as pausas<small>Silêncios e “é…”, “hã…”</small></span><input id="o-pauses" type="checkbox" role="switch" checked /></label>
+              <label class="sw"><span>Tirar repetições<small>Frase gravada de novo, ensaio e conversa fora</small></span><input id="o-retakes" type="checkbox" role="switch" checked /></label>
+              <label class="sw"><span>Zoom nos destaques<small>Aproxima nas palavras fortes</small></span><input id="o-zoom" type="checkbox" role="switch" checked /></label>
+              <label class="sw"><span>Efeitos sonoros<small>Estalo nas legendas, batida no zoom</small></span><input id="o-sfx" type="checkbox" role="switch" checked /></label>
+              <div class="music">
+                <button class="btn-sec" id="music" type="button"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V5.5l11-2V16" /><circle cx="6.5" cy="18" r="2.5" /><circle cx="17.5" cy="16" r="2.5" /></svg><span id="music-name">Pôr música de fundo</span></button>
+                <button class="btn-sec small hidden" id="music-off" type="button" aria-label="Tirar a música">Tirar</button>
+              </div>
+              <label class="sw hidden" id="dropbox"><span>Batida no momento certo<small>A batida forte da música entra na palavra principal do começo</small></span><input id="o-drop" type="checkbox" role="switch" checked /></label>
+            </div>
+            <div class="card">
+              <h2>Sua marca</h2>
+              <label class="sw" for="o-brandcolor"><span>Cor da marca no destaque<small>A palavra que está sendo dita fica nesta cor</small></span><span class="end"><input id="brand-color" class="swatch" type="color" value="#ffd23f" aria-label="Escolher a cor da marca" /><input id="o-brandcolor" type="checkbox" role="switch" /></span></label>
+              <label class="field-label">Nome no topo (opcional)<input class="field" id="brand-top" type="text" maxlength="60" placeholder="Ex.: Pizzaria do Zé" /></label>
+              <label class="field-label">Seu @ embaixo (opcional)<input class="field" id="brand-bottom" type="text" maxlength="60" placeholder="@seuperfil" /></label>
+            </div>
+            <details class="more" id="more">
+              <summary>Mais opções<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg></summary>
+              <div class="card">
+                <div class="field-label"><span class="ai-row"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 4.5 12.4 9a2 2 0 0 0 1.3 1.3l4.5 1.4-4.5 1.4a2 2 0 0 0-1.3 1.3L11 18.9l-1.4-4.5a2 2 0 0 0-1.3-1.3l-4.5-1.4 4.5-1.4A2 2 0 0 0 9.6 9z" /><path d="M18.5 3.5v3M17 5h3" /></svg>IA: melhores momentos e texto do post</span>
+                  <input class="field ai" id="ai-code" type="password" autocomplete="off" placeholder="Cole aqui o seu código de acesso" aria-label="Código de acesso da IA" /></div>
+                <p class="tip">Com o código, a IA escolhe os melhores momentos e os destaques, acha as repetições e escreve o texto do post. Sem ele, tudo pelas regras do app.</p>
+                <label class="field-label">Vídeo deitado (podcast, entrevista)
+                  <select class="sel" id="layout">
+                    <option value="" selected>Seguir quem está falando</option>
+                    <option value="duas">Duas pessoas, uma em cima da outra</option>
+                  </select>
+                </label>
+                <label class="field-label">Velocidade da fala
+                  <select class="sel" id="speed">
+                    <option value="1" selected>Normal</option>
+                    <option value="1.1">1,1× mais rápida</option>
+                    <option value="1.2">1,2× mais rápida</option>
+                    <option value="1.25">1,25× mais rápida</option>
+                    <option value="1.5">1,5× mais rápida</option>
+                  </select>
+                </label>
+                <label class="sw"><span>Frase curta em destaque<small>1 ou 2 palavras em letra grande e forte</small></span><input id="o-short" type="checkbox" role="switch" /></label>
+                <label class="sw"><span>Legenda atrás da pessoa<small>A cabeça passa na frente do texto. Demora mais.</small></span><input id="o-behind" type="checkbox" role="switch" /></label>
+                <label class="sw"><span>Prévia rápida<small>Menor e sem capa, para testar as escolhas</small></span><input id="o-preview" type="checkbox" role="switch" /></label>
+              </div>
+            </details>
+          </div>
+          <div class="foot">
+            <div class="mini hidden" id="mini"><div class="bar"><i id="minibar"></i></div></div>
+            <div class="status" id="status" aria-live="polite"></div>
+            <button class="btn-main big" id="go" type="button" disabled><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="8" r="2.4" /><circle cx="6" cy="17" r="2.4" /><path d="M8 9.3 16.5 15.5M8 15.7 16.5 9.5" /><path d="M19 3v3.5M17.25 4.75h3.5" /></svg><span id="go-text">Fazer meu Reel</span></button>
+          </div>
+        </section>
+
+        <!-- 2. fazendo (e o erro, no mesmo cartão: a etapa que falhou fica marcada) -->
+        <section class="view v-run">
+          <div class="scroll">
+            <div class="card" id="progress" tabindex="-1">
+              <h2 class="run-only" id="doing">Fazendo seu Reel</h2>
+              <p class="now-line run-only" id="now" aria-live="polite"></p>
+              <div class="run-only"><div class="bar"><i id="bar"></i></div></div>
+              <div class="bar-row run-only"><span id="pct">0%</span><span id="eta"></span></div>
+              <p class="msg run-only" id="msg" aria-live="polite"></p>
+              <div class="errbox err-only" id="errbox" role="alert">
+                <strong id="err-title">Não deu certo</strong>
+                <p id="err-what"></p>
+                <details><summary>Detalhes para o suporte</summary><code id="err-tech"></code></details>
+              </div>
+              <ol class="etapas" id="steps"></ol>
+              <button class="btn-sec run-only" id="stop" type="button">Cancelar</button>
+              <button class="btn-main err-only" id="retry" type="button">Tentar de novo</button>
+              <div class="row err-only"><button class="btn-sec" id="err-back" type="button">Mudar opções</button><button class="btn-sec" id="err-other" type="button">Outro vídeo</button></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 3. pronto -->
+        <section class="view v-done">
+          <div class="scroll">
+            <div class="card">
+              <h2 class="title"><svg class="i done-i" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5" /></svg><span id="done-title">Seu Reel está pronto</span></h2>
+              <p class="where" id="where"><span id="reel-len"></span><span id="where-text"></span></p>
+              <p class="done-msg" id="donemsg" aria-live="polite"></p>
+              <button class="btn-main" id="show" type="button"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 7.5A2 2 0 0 1 5.5 5.5h4l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z" /></svg>Abrir a pasta</button>
+              <div class="row"><button class="btn-sec" id="back" type="button">Mudar opções</button><button class="btn-sec" id="another" type="button">Outro vídeo</button></div>
+            </div>
+            <div class="card hidden" id="postbox">
+              <div class="head-row"><span class="ai-row"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 4.5 12.4 9a2 2 0 0 0 1.3 1.3l4.5 1.4-4.5 1.4a2 2 0 0 0-1.3 1.3L11 18.9l-1.4-4.5a2 2 0 0 0-1.3-1.3l-4.5-1.4 4.5-1.4A2 2 0 0 0 9.6 9z" /><path d="M18.5 3.5v3M17 5h3" /></svg>Texto do post, feito pela IA</span></div>
+              <p class="post-text" id="post-text"></p>
+              <button class="btn-ai" id="post-copy" type="button"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2" /><path d="M16 8V5.5A1.5 1.5 0 0 0 14.5 4h-9A1.5 1.5 0 0 0 4 5.5v9A1.5 1.5 0 0 0 5.5 16H8" /></svg><span id="post-copy-text">Copiar título, legenda e hashtags</span></button>
+            </div>
+            <div class="card" id="coverbox">
+              <div class="head-row"><h2>Capa · clique na que preferir</h2><button class="btn-link" id="cover" type="button">Ver grande</button></div>
+              <div class="covers" id="covers"></div>
+            </div>
+            <div class="card" id="fixbox">
+              <h2>Legendas</h2>
+              <ol class="lines" id="lines"></ol>
+              <label class="sw hidden" id="framebox"><span>Enquadramento<small>Puxe até a pessoa e clique em Refazer</small></span><input id="framex" type="range" min="0" max="100" value="50" style="width:140px" aria-label="Enquadramento" /></label>
+              <textarea id="fixes" rows="3" spellcheck="false" aria-label="Correções das legendas" placeholder="Alguma palavra errada? Uma por linha:&#10;errado = certo"></textarea>
+              <button class="btn-sec" id="redo" type="button">Refazer com as correções</button>
+            </div>
+          </div>
+        </section>
+      </aside>
+    </div>
+
+    <div class="modal gallery hidden" id="gallery" role="dialog" aria-modal="true" aria-labelledby="gallery-t">
+      <div class="box">
+        <div class="head-row"><h2 id="gallery-t">Escolha o estilo da legenda</h2><button class="btn-sec small" id="gallery-close" type="button">Fechar</button></div>
+        <div class="gal-scroll">
+          <h3>Destaques</h3>
+          <div class="gal-grid" id="gal-top"></div>
+          <h3>Mais estilos</h3>
+          <div class="gal-grid" id="gal-rest"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal hidden" id="closeask" role="dialog" aria-modal="true" aria-labelledby="closeask-t">
+      <div class="box">
+        <h2 id="closeask-t">Seu Reel ainda não terminou</h2>
+        <p>Se fechar agora, ele para no meio. O vídeo original não muda.</p>
+        <button class="btn-main" id="keep" type="button">Continuar fazendo</button>
+        <button class="btn-sec" id="quit" type="button">Parar e fechar</button>
+      </div>
+    </div>
+
+    <script src="../../src/core/captions/srt.js"></script>
+    <script src="../../src/core/captions/transcript.js"></script>
+    <script src="../../src/core/captions/segmenter.js"></script>
+    <script src="../../src/core/captions/frames.js"></script>
+    <script src="../../src/core/captions/disfluency.js"></script>
+    <script src="../../src/core/captions/dictionary.js"></script>
+    <script src="../../src/core/captions/emphasis.js"></script>
+    <script src="../../src/core/captions/sfx.js"></script>
+    <script src="../../src/core/captions/timing.js"></script>
+    <script src="../../src/core/captions/lines.js"></script>
+    <script src="../../src/core/captions/compose.js"></script>
+    <script src="../../src/core/captions/safezone.js"></script>
+    <script src="../../src/core/captions/faceaware.js"></script>
+    <script src="../../src/core/audio/silence.js"></script>
+    <script src="../../src/core/audio/beats.js"></script>
+    <script src="../../src/core/audio/drop.js"></script>
+    <script src="../../src/core/video/reel-plan.js"></script>
+    <script src="../../src/adobe/cep/js/services/ai.js"></script>
+    <script src="../../src/adobe/cep/js/services/transcribe.js"></script>
+    <script src="../../src/adobe/cep/js/services/render.js"></script>
+    <script src="../../src/adobe/cep/js/services/render-motion.js"></script>
+    <script src="../../src/adobe/cep/js/services/person-matte.js"></script>
+    <script src="../../src/adobe/cep/js/services/face-box.js"></script>
+    <script src="../../src/adobe/cep/js/services/speed.js"></script>
+    <script src="pipeline.js"></script>
+    <script src="ui.js"></script>
+  </body>
+</html>
